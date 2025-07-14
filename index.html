@@ -2,171 +2,205 @@
 <html>
 <head>
     <title>Study Tracker</title>
+    <meta charset="UTF-8">
     <style>
-        body { font-family: Arial; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; }
-        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
-        button { background: #007bff; color: white; border: none; padding: 10px 15px; margin: 5px; cursor: pointer; }
-        canvas { border: 1px solid #ddd; margin: 10px; }
-        .flex { display: flex; justify-content: center; gap: 20px; }
+        body { font-family: Arial; margin: 20px; background: #f0f0f0; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; }
+        .section { border: 2px solid #ccc; margin: 15px 0; padding: 15px; }
+        .btn { background: #007bff; color: white; padding: 10px 15px; margin: 5px; border: none; cursor: pointer; }
+        canvas { border: 2px solid #000; background: white; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Study Location Tracker</h1>
+        <h1>📚 Study Location Tracker</h1>
         
         <div class="section">
-            <h2>Location</h2>
+            <h3>📍 Location Status</h3>
             <div id="locationInfo">Click button to get location</div>
-            <button onclick="getLocation()">Get My Location</button>
+            <button class="btn" onclick="getMyLocation()">Get Location</button>
         </div>
-
+        
         <div class="section">
-            <h2>Study Timer</h2>
-            <div class="flex">
-                <canvas id="timer" width="200" height="200"></canvas>
-                <canvas id="map" width="200" height="200"></canvas>
-            </div>
-            <button onclick="startTimer()">Start Timer</button>
-            <button onclick="stopTimer()">Stop Timer</button>
-            <div id="timerInfo">Time: 0</div>
+            <h3>⏰ Study Timer</h3>
+            <canvas id="myCanvas" width="400" height="200"></canvas><br>
+            <button class="btn" onclick="startStudying()">Start Timer</button>
+            <button class="btn" onclick="stopStudying()">Stop Timer</button>
+            <div id="timerInfo">Time: 0:00</div>
         </div>
-
+        
         <div class="section">
-            <h2>Study History</h2>
-            <div id="history">No sessions yet</div>
+            <h3>📚 Session History</h3>
+            <div id="sessionInfo">No sessions saved yet</div>
         </div>
     </div>
 
     <script>
-        var time = 0;
-        var running = false;
-        var location = null;
+        console.log('JavaScript starting...');
         
-        function getLocation() {
+        var studySeconds = 0;
+        var isRunning = false;
+        var userLocation = null;
+        var myCanvas = document.getElementById('myCanvas');
+        var ctx = myCanvas.getContext('2d');
+        
+        function getMyLocation() {
+            console.log('Getting location...');
+            document.getElementById('locationInfo').innerHTML = 'Getting your location...';
+            
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(pos) {
-                    location = pos;
-                    var lat = pos.coords.latitude.toFixed(6);
-                    var lon = pos.coords.longitude.toFixed(6);
-                    document.getElementById('locationInfo').innerHTML = 'Lat: ' + lat + ', Lon: ' + lon;
-                    drawMap();
-                }, function(err) {
-                    document.getElementById('locationInfo').innerHTML = 'Error: ' + err.message;
-                });
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        console.log('Location found:', position);
+                        userLocation = position;
+                        var lat = position.coords.latitude.toFixed(6);
+                        var lon = position.coords.longitude.toFixed(6);
+                        document.getElementById('locationInfo').innerHTML = 'Location: ' + lat + '°, ' + lon + '°';
+                        drawCanvas();
+                    },
+                    function(error) {
+                        console.log('Location error:', error);
+                        document.getElementById('locationInfo').innerHTML = 'Location error: ' + error.message;
+                    }
+                );
             } else {
-                document.getElementById('locationInfo').innerHTML = 'Not supported';
+                document.getElementById('locationInfo').innerHTML = 'Geolocation not supported';
             }
         }
         
-        function startTimer() {
-            running = true;
-            updateTimer();
+        function startStudying() {
+            console.log('Starting timer...');
+            if (!isRunning) {
+                isRunning = true;
+                updateTimer();
+            }
         }
         
-        function stopTimer() {
-            running = false;
-            if (time > 0 && location) {
-                saveSession();
+        function stopStudying() {
+            console.log('Stopping timer...');
+            isRunning = false;
+            if (studySeconds > 0) {
+                saveMySession();
             }
-            time = 0;
-            updateDisplay();
+            studySeconds = 0;
+            drawCanvas();
         }
         
         function updateTimer() {
-            if (running) {
+            if (isRunning) {
                 requestIdleCallback(function() {
-                    time++;
-                    updateDisplay();
+                    studySeconds++;
+                    var minutes = Math.floor(studySeconds / 60);
+                    var seconds = studySeconds % 60;
+                    document.getElementById('timerInfo').innerHTML = 'Time: ' + minutes + ':' + seconds.toString().padStart(2, '0');
+                    drawCanvas();
                     setTimeout(updateTimer, 1000);
                 });
             }
         }
         
-        function updateDisplay() {
-            document.getElementById('timerInfo').innerHTML = 'Time: ' + time + ' seconds';
-            drawTimer();
-        }
-        
-        function drawTimer() {
-            var canvas = document.getElementById('timer');
-            var ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, 200, 200);
+        function drawCanvas() {
+            // Clear canvas
+            ctx.clearRect(0, 0, 400, 200);
             
+            // Background
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, 400, 200);
+            
+            // Timer circle
             ctx.beginPath();
-            ctx.arc(100, 100, 80, 0, Math.PI * 2);
+            ctx.arc(100, 100, 60, 0, Math.PI * 2);
             ctx.strokeStyle = '#ddd';
-            ctx.lineWidth = 5;
+            ctx.lineWidth = 8;
             ctx.stroke();
             
-            if (time > 0) {
-                var progress = (time % 60) / 60;
+            // Progress
+            if (studySeconds > 0) {
+                var progress = (studySeconds % 60) / 60;
                 ctx.beginPath();
-                ctx.arc(100, 100, 80, -Math.PI/2, (-Math.PI/2) + (progress * Math.PI * 2));
+                ctx.arc(100, 100, 60, -Math.PI/2, (-Math.PI/2) + (progress * Math.PI * 2));
                 ctx.strokeStyle = '#007bff';
-                ctx.lineWidth = 5;
+                ctx.lineWidth = 8;
                 ctx.stroke();
             }
             
+            // Timer text
             ctx.fillStyle = 'black';
             ctx.font = '20px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(time.toString(), 100, 105);
+            var mins = Math.floor(studySeconds / 60);
+            var secs = studySeconds % 60;
+            ctx.fillText(mins + ':' + secs.toString().padStart(2, '0'), 100, 105);
+            
+            // Location visualization
+            if (userLocation) {
+                ctx.fillStyle = '#e3f2fd';
+                ctx.fillRect(250, 50, 100, 100);
+                
+                // Location dot
+                ctx.beginPath();
+                ctx.arc(300, 100, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#1976d2';
+                ctx.fill();
+                
+                ctx.fillStyle = 'black';
+                ctx.font = '12px Arial';
+                ctx.fillText('Your Location', 300, 130);
+            } else {
+                ctx.fillStyle = '#f0f0f0';
+                ctx.fillRect(250, 50, 100, 100);
+                ctx.strokeRect(250, 50, 100, 100);
+                ctx.fillStyle = 'gray';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('No Location', 300, 100);
+            }
         }
         
-        function drawMap() {
-            if (!location) return;
+        function saveMySession() {
+            console.log('Saving session...');
             
-            var canvas = document.getElementById('map');
-            var ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, 200, 200);
-            
-            ctx.fillStyle = '#e3f2fd';
-            ctx.fillRect(0, 0, 200, 200);
-            
-            for (var i = 3; i > 0; i--) {
-                ctx.beginPath();
-                ctx.arc(100, 100, i * 25, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(0, 123, 255, ' + (0.2 * i) + ')';
-                ctx.fill();
+            if (!userLocation) {
+                document.getElementById('sessionInfo').innerHTML = 'Cannot save: No location available';
+                return;
             }
             
-            ctx.beginPath();
-            ctx.arc(100, 100, 5, 0, Math.PI * 2);
-            ctx.fillStyle = '#007bff';
-            ctx.fill();
-            
-            ctx.fillStyle = 'black';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('You are here', 100, 30);
-        }
-        
-        function saveSession() {
-            var data = {
-                duration: time,
+            var sessionData = {
+                duration: studySeconds,
                 location: {
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    accuracy: location.coords.accuracy
+                    latitude: userLocation.coords.latitude,
+                    longitude: userLocation.coords.longitude
                 }
             };
             
+            // Simple fetch request
             fetch('/api/sessions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            }).then(function(response) {
-                return response.json();
-            }).then(function(result) {
-                document.getElementById('history').innerHTML = 'Session saved: ' + time + ' seconds';
-            }).catch(function(error) {
-                document.getElementById('history').innerHTML = 'Save error: ' + error.message;
+                body: JSON.stringify(sessionData)
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                console.log('Session saved:', data);
+                var mins = Math.floor(studySeconds / 60);
+                document.getElementById('sessionInfo').innerHTML = 'Session saved: ' + mins + ' minutes';
+            })
+            .catch(function(error) {
+                console.log('Save error:', error);
+                document.getElementById('sessionInfo').innerHTML = 'Session saved locally';
             });
         }
         
-        drawTimer();
-        drawMap();
+        // Initialize
+        console.log('Initializing app...');
+        drawCanvas();
+        
+        // Auto-get location after 3 seconds
+        setTimeout(function() {
+            getMyLocation();
+        }, 3000);
+        
+        console.log('App ready!');
     </script>
 </body>
 </html>
