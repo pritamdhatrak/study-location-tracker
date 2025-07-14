@@ -1,0 +1,172 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Study Tracker</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        button { background: #007bff; color: white; border: none; padding: 10px 15px; margin: 5px; cursor: pointer; }
+        canvas { border: 1px solid #ddd; margin: 10px; }
+        .flex { display: flex; justify-content: center; gap: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Study Location Tracker</h1>
+        
+        <div class="section">
+            <h2>Location</h2>
+            <div id="locationInfo">Click button to get location</div>
+            <button onclick="getLocation()">Get My Location</button>
+        </div>
+
+        <div class="section">
+            <h2>Study Timer</h2>
+            <div class="flex">
+                <canvas id="timer" width="200" height="200"></canvas>
+                <canvas id="map" width="200" height="200"></canvas>
+            </div>
+            <button onclick="startTimer()">Start Timer</button>
+            <button onclick="stopTimer()">Stop Timer</button>
+            <div id="timerInfo">Time: 0</div>
+        </div>
+
+        <div class="section">
+            <h2>Study History</h2>
+            <div id="history">No sessions yet</div>
+        </div>
+    </div>
+
+    <script>
+        var time = 0;
+        var running = false;
+        var location = null;
+        
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(pos) {
+                    location = pos;
+                    var lat = pos.coords.latitude.toFixed(6);
+                    var lon = pos.coords.longitude.toFixed(6);
+                    document.getElementById('locationInfo').innerHTML = 'Lat: ' + lat + ', Lon: ' + lon;
+                    drawMap();
+                }, function(err) {
+                    document.getElementById('locationInfo').innerHTML = 'Error: ' + err.message;
+                });
+            } else {
+                document.getElementById('locationInfo').innerHTML = 'Not supported';
+            }
+        }
+        
+        function startTimer() {
+            running = true;
+            updateTimer();
+        }
+        
+        function stopTimer() {
+            running = false;
+            if (time > 0 && location) {
+                saveSession();
+            }
+            time = 0;
+            updateDisplay();
+        }
+        
+        function updateTimer() {
+            if (running) {
+                requestIdleCallback(function() {
+                    time++;
+                    updateDisplay();
+                    setTimeout(updateTimer, 1000);
+                });
+            }
+        }
+        
+        function updateDisplay() {
+            document.getElementById('timerInfo').innerHTML = 'Time: ' + time + ' seconds';
+            drawTimer();
+        }
+        
+        function drawTimer() {
+            var canvas = document.getElementById('timer');
+            var ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 200, 200);
+            
+            ctx.beginPath();
+            ctx.arc(100, 100, 80, 0, Math.PI * 2);
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+            
+            if (time > 0) {
+                var progress = (time % 60) / 60;
+                ctx.beginPath();
+                ctx.arc(100, 100, 80, -Math.PI/2, (-Math.PI/2) + (progress * Math.PI * 2));
+                ctx.strokeStyle = '#007bff';
+                ctx.lineWidth = 5;
+                ctx.stroke();
+            }
+            
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(time.toString(), 100, 105);
+        }
+        
+        function drawMap() {
+            if (!location) return;
+            
+            var canvas = document.getElementById('map');
+            var ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 200, 200);
+            
+            ctx.fillStyle = '#e3f2fd';
+            ctx.fillRect(0, 0, 200, 200);
+            
+            for (var i = 3; i > 0; i--) {
+                ctx.beginPath();
+                ctx.arc(100, 100, i * 25, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 123, 255, ' + (0.2 * i) + ')';
+                ctx.fill();
+            }
+            
+            ctx.beginPath();
+            ctx.arc(100, 100, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#007bff';
+            ctx.fill();
+            
+            ctx.fillStyle = 'black';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('You are here', 100, 30);
+        }
+        
+        function saveSession() {
+            var data = {
+                duration: time,
+                location: {
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude,
+                    accuracy: location.coords.accuracy
+                }
+            };
+            
+            fetch('/api/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(function(response) {
+                return response.json();
+            }).then(function(result) {
+                document.getElementById('history').innerHTML = 'Session saved: ' + time + ' seconds';
+            }).catch(function(error) {
+                document.getElementById('history').innerHTML = 'Save error: ' + error.message;
+            });
+        }
+        
+        drawTimer();
+        drawMap();
+    </script>
+</body>
+</html>

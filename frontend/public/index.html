@@ -1,0 +1,370 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Location Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 15px; margin: 5px; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        canvas { border: 2px solid #ddd; margin: 10px; background: white; }
+        .canvas-container { display: flex; justify-content: center; flex-wrap: wrap; }
+        #locationInfo, #timerInfo { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Study Location Tracker</h1>
+        
+        <div class="section">
+            <h2> Location</h2>
+            <div id="locationInfo">Click button to get your location</div>
+            <button onclick="getCurrentLocation()">Get My Location</button>
+            <button onclick="watchLocation()">Track Location</button>
+            <button onclick="stopWatching()">Stop Tracking</button>
+        </div>
+
+        <div class="section">
+            <h2> Study Timer</h2>
+            <div class="canvas-container">
+                <canvas id="timerCanvas" width="250" height="250"></canvas>
+                <canvas id="locationCanvas" width="250" height="250"></canvas>
+            </div>
+            <div>
+                <button onclick="startStudyTimer()"> Start Timer</button>
+                <button onclick="pauseStudyTimer()"> Pause Timer</button>
+                <button onclick="stopStudyTimer()"> Stop Timer</button>
+            </div>
+            <div id="timerInfo">Time: 0:00</div>
+        </div>
+
+        <div class="section">
+            <h2> Study History</h2>
+            <div id="studyHistory">No study sessions yet</div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let studySeconds = 0;
+        let isTimerRunning = false;
+        let watchId = null;
+        let currentPos = null;
+        let timerInterval = null;
+
+        // Get canvas elements
+        const timerCanvas = document.getElementById('timerCanvas');
+        const locationCanvas = document.getElementById('locationCanvas');
+        const timerCtx = timerCanvas.getContext('2d');
+        const locationCtx = locationCanvas.getContext('2d');
+
+        // Initialize canvases
+        function initCanvases() {
+            drawTimerCanvas(0);
+            drawLocationPlaceholder();
+        }
+
+        // Location functions
+        function getCurrentLocation() {
+            console.log('Getting location...');
+            
+            if (!navigator.geolocation) {
+                document.getElementById('locationInfo').innerHTML = ' Geolocation not supported';
+                return;
+            }
+
+            document.getElementById('locationInfo').innerHTML = ' Getting location...';
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    currentPos = position;
+                    showLocationInfo(position);
+                    drawLocationCanvas(position);
+                },
+                function(error) {
+                    let msg = ' Location error: ';
+                    switch(error.code) {
+                        case 1: msg += 'Permission denied'; break;
+                        case 2: msg += 'Position unavailable'; break;
+                        case 3: msg += 'Timeout'; break;
+                        default: msg += 'Unknown error';
+                    }
+                    document.getElementById('locationInfo').innerHTML = msg;
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+            );
+        }
+
+        function showLocationInfo(position) {
+            const lat = position.coords.latitude.toFixed(6);
+            const lon = position.coords.longitude.toFixed(6);
+            const acc = position.coords.accuracy.toFixed(0);
+            
+            document.getElementById('locationInfo').innerHTML = 
+                ' <strong>Location Found!</strong><br>' +
+                ' Latitude: ' + lat + '<br>' +
+                ' Longitude: ' + lon + '<br>' +
+                ' Accuracy: ' + acc + ' meters';
+        }
+
+        function watchLocation() {
+            if (!navigator.geolocation) return;
+            
+            watchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    currentPos = position;
+                    showLocationInfo(position);
+                    drawLocationCanvas(position);
+                },
+                function(error) {
+                    console.log('Watch error:', error);
+                }
+            );
+            
+            document.getElementById('locationInfo').innerHTML += '<br> <em>Tracking location...</em>';
+        }
+
+        function stopWatching() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+        }
+
+        // Timer functions
+        function startStudyTimer() {
+            console.log('Starting timer...');
+            if (!isTimerRunning) {
+                isTimerRunning = true;
+                updateTimer();
+            }
+        }
+
+        function pauseStudyTimer() {
+            console.log('Pausing timer...');
+            isTimerRunning = false;
+        }
+
+        function stopStudyTimer() {
+            console.log('Stopping timer...');
+            isTimerRunning = false;
+            
+            if (studySeconds > 0) {
+                saveStudySession();
+            }
+            
+            studySeconds = 0;
+            updateTimerDisplay();
+            drawTimerCanvas(0);
+        }
+
+        function updateTimer() {
+            if (isTimerRunning) {
+                studySeconds++;
+                updateTimerDisplay();
+                drawTimerCanvas(studySeconds);
+                
+                // Use requestIdleCallback for background tasks API
+                requestIdleCallback(function() {
+                    setTimeout(updateTimer, 1000);
+                });
+            }
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(studySeconds / 60);
+            const seconds = studySeconds % 60;
+            document.getElementById('timerInfo').innerHTML = 
+                ' Time: ' + minutes + ':' + seconds.toString().padStart(2, '0');
+        }
+
+        // Canvas drawing functions
+        function drawTimerCanvas(seconds) {
+            const centerX = 125;
+            const centerY = 125;
+            const radius = 100;
+
+            // Clear canvas
+            timerCtx.clearRect(0, 0, 250, 250);
+
+            // Background circle
+            timerCtx.beginPath();
+            timerCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            timerCtx.strokeStyle = '#e0e0e0';
+            timerCtx.lineWidth = 8;
+            timerCtx.stroke();
+
+            // Progress arc
+            if (seconds > 0) {
+                const progress = (seconds % 3600) / 3600; // Reset every hour
+                timerCtx.beginPath();
+                timerCtx.arc(centerX, centerY, radius, -Math.PI/2, (-Math.PI/2) + (progress * Math.PI * 2));
+                timerCtx.strokeStyle = '#007bff';
+                timerCtx.lineWidth = 8;
+                timerCtx.stroke();
+            }
+
+            // Center text
+            timerCtx.fillStyle = '#333';
+            timerCtx.font = 'bold 24px Arial';
+            timerCtx.textAlign = 'center';
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            timerCtx.fillText(minutes + ':' + secs.toString().padStart(2, '0'), centerX, centerY + 8);
+            
+            // Label
+            timerCtx.font = '14px Arial';
+            timerCtx.fillText('Study Time', centerX, centerY + 35);
+        }
+
+        function drawLocationPlaceholder() {
+            locationCtx.fillStyle = '#f8f9fa';
+            locationCtx.fillRect(0, 0, 250, 250);
+            
+            locationCtx.fillStyle = '#666';
+            locationCtx.font = '18px Arial';
+            locationCtx.textAlign = 'center';
+            locationCtx.fillText(' Location Map', 125, 100);
+            locationCtx.font = '14px Arial';
+            locationCtx.fillText('Click "Get My Location"', 125, 130);
+            locationCtx.fillText('to see your position', 125, 150);
+        }
+
+        function drawLocationCanvas(position) {
+            const centerX = 125;
+            const centerY = 125;
+
+            // Clear canvas
+            locationCtx.clearRect(0, 0, 250, 250);
+
+            // Background
+            locationCtx.fillStyle = '#e8f4fd';
+            locationCtx.fillRect(0, 0, 250, 250);
+
+            // Accuracy circles
+            for (let i = 3; i > 0; i--) {
+                locationCtx.beginPath();
+                locationCtx.arc(centerX, centerY, i * 25, 0, Math.PI * 2);
+                locationCtx.fillStyle = 'rgba(0, 123, 255, ' + (0.1 * i) + ')';
+                locationCtx.fill();
+            }
+
+            // Center point (your location)
+            locationCtx.beginPath();
+            locationCtx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+            locationCtx.fillStyle = '#007bff';
+            locationCtx.fill();
+
+            // Label
+            locationCtx.fillStyle = '#333';
+            locationCtx.font = 'bold 14px Arial';
+            locationCtx.textAlign = 'center';
+            locationCtx.fillText(' You are here', centerX, 30);
+            
+            // Coordinates
+            locationCtx.font = '10px Arial';
+            const lat = position.coords.latitude.toFixed(4);
+            const lon = position.coords.longitude.toFixed(4);
+            locationCtx.fillText(lat + ', ' + lon + '', centerX, 220);
+        }
+
+        // Save study session
+        function saveStudySession() {
+            if (!currentPos) {
+                alert('Please get your location first');
+                return;
+            }
+
+            const sessionData = {
+                duration: studySeconds,
+                location: {
+                    latitude: currentPos.coords.latitude,
+                    longitude: currentPos.coords.longitude,
+                    accuracy: currentPos.coords.accuracy
+                },
+                timestamp: new Date().toISOString()
+            };
+
+            // Try to save to server
+            fetch('/api/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(sessionData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Session saved:', data);
+                updateStudyHistory();
+                alert('Study session saved! ');
+            })
+            .catch(error => {
+                console.error('Error saving session:', error);
+                // Save locally if server fails
+                saveLocally(sessionData);
+                alert('Session saved locally! ');
+            });
+        }
+
+        function saveLocally(sessionData) {
+            let sessions = JSON.parse(localStorage.getItem('studySessions') || '[]');
+            sessions.unshift(sessionData);
+            sessions = sessions.slice(0, 10); // Keep only last 10
+            localStorage.setItem('studySessions', JSON.stringify(sessions));
+            updateStudyHistory();
+        }
+
+        function updateStudyHistory() {
+            // Try to load from server first
+            fetch('/api/sessions')
+                .then(response => response.json())
+                .then(sessions => displayHistory(sessions))
+                .catch(() => {
+                    // Fallback to local storage
+                    const sessions = JSON.parse(localStorage.getItem('studySessions') || '[]');
+                    displayHistory(sessions);
+                });
+        }
+
+        function displayHistory(sessions) {
+            const historyDiv = document.getElementById('studyHistory');
+            
+            if (sessions.length === 0) {
+                historyDiv.innerHTML = ' No study sessions yet';
+                return;
+            }
+
+            let html = '';
+            sessions.slice(0, 5).forEach(session => {
+                const duration = Math.floor(session.duration / 60) + ':' + (session.duration % 60).toString().padStart(2, '0');
+                const date = new Date(session.timestamp || session.startTime).toLocaleString();
+                const lat = session.location.latitude.toFixed(4);
+                const lon = session.location.longitude.toFixed(4);
+                
+                html += '<div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-left: 4px solid #007bff; border-radius: 5px;">';
+                html += '<strong> ' + date + '</strong><br>';
+                html += ' Duration: ' + duration + '<br>';
+                html += ' Location: ' + lat + ', ' + lon + '';
+                html += '</div>';
+            });
+            
+            historyDiv.innerHTML = html;
+        }
+
+        // Initialize everything when page loads
+        window.addEventListener('load', function() {
+            console.log('Page loaded, initializing...');
+            initCanvases();
+            updateStudyHistory();
+            
+            // Test if JavaScript is working
+            console.log('JavaScript is working! ');
+        });
+
+        // Test function to verify JavaScript is loaded
+        console.log('Script loaded successfully! ');
+    </script>
+</body>
+</html>
