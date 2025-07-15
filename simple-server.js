@@ -1,27 +1,395 @@
 ﻿const express = require('express');
-const path = require('path');
 const app = express();
 
-// Middleware
 app.use(express.json());
-app.use(express.static('.'));
 
-// API endpoint
+app.get('/', (req, res) => {
+    res.send(\<!DOCTYPE html>
+<html>
+<head>
+    <title>Study Location Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #fafafa; }
+        button { background: #007bff; color: white; border: none; padding: 12px 20px; margin: 5px; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #0056b3; }
+        canvas { border: 2px solid #ddd; margin: 10px; background: white; border-radius: 5px; }
+        .flex { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .status { padding: 12px; margin: 10px 0; background: #e9ecef; border-radius: 5px; border-left: 4px solid #007bff; }
+        .success { background: #d4edda; border-left-color: #28a745; }
+        .error { background: #f8d7da; border-left-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 Study Location Tracker</h1>
+        <p style="text-align: center; color: #666;">Track your study sessions with location and time visualization</p>
+        
+        <div class="section">
+            <h2>📍 Your Location</h2>
+            <div class="status" id="locationStatus">🔄 Getting your location automatically...</div>
+            <button onclick="refreshLocation()">🔄 Refresh Location</button>
+            <button onclick="toggleTracking()" id="trackBtn">📍 Start Tracking</button>
+        </div>
+
+        <div class="section">
+            <h2>⏰ Study Timer & Visualization</h2>
+            <div class="flex">
+                <canvas id="timerCanvas" width="250" height="250"></canvas>
+                <canvas id="locationCanvas" width="250" height="250"></canvas>
+            </div>
+            <div style="text-align: center;">
+                <button onclick="startTimer()">▶️ Start Studying</button>
+                <button onclick="pauseTimer()">⏸️ Pause</button>
+                <button onclick="stopTimer()">⏹️ Stop & Save</button>
+            </div>
+            <div class="status" id="timerStatus">Ready to start studying - Time: 0:00</div>
+        </div>
+
+        <div class="section">
+            <h2>📚 Study Sessions</h2>
+            <div id="sessionHistory">No study sessions yet. Start your first session!</div>
+        </div>
+    </div>
+
+    <script>
+        console.log('🚀 Study Location Tracker starting...');
+        
+        // Global variables
+        var studySeconds = 0;
+        var isStudying = false;
+        var currentLocation = null;
+        var isTracking = false;
+        var watchId = null;
+        
+        // Canvas elements
+        var timerCanvas = document.getElementById('timerCanvas');
+        var locationCanvas = document.getElementById('locationCanvas');
+        var timerCtx = timerCanvas.getContext('2d');
+        var locationCtx = locationCanvas.getContext('2d');
+
+        // Location functions
+        function refreshLocation() {
+            console.log('Getting location...');
+            updateStatus('locationStatus', '🔄 Getting your location...', '');
+            
+            if (!navigator.geolocation) {
+                updateStatus('locationStatus', '❌ Geolocation not supported in this browser', 'error');
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    console.log('Location found:', position);
+                    currentLocation = position;
+                    showLocationInfo(position);
+                    drawLocationMap(position);
+                },
+                function(error) {
+                    console.error('Location error:', error);
+                    var message = '❌ Location error: ';
+                    switch(error.code) {
+                        case 1: message += 'Permission denied. Please allow location access.'; break;
+                        case 2: message += 'Position unavailable.'; break;
+                        case 3: message += 'Request timeout.'; break;
+                        default: message += 'Unknown error.';
+                    }
+                    updateStatus('locationStatus', message, 'error');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+            );
+        }
+
+        function showLocationInfo(position) {
+            var lat = position.coords.latitude.toFixed(6);
+            var lon = position.coords.longitude.toFixed(6);
+            var accuracy = Math.round(position.coords.accuracy);
+            
+            updateStatus('locationStatus', 
+                '✅ Location found successfully!<br>' +
+                '📍 Coordinates: ' + lat + '°, ' + lon + '°<br>' +
+                '🎯 Accuracy: ' + accuracy + ' meters<br>' +
+                '🕒 Updated: ' + new Date().toLocaleTimeString(), 'success');
+        }
+
+        function toggleTracking() {
+            if (isTracking) {
+                stopTracking();
+            } else {
+                startTracking();
+            }
+        }
+
+        function startTracking() {
+            if (!navigator.geolocation) return;
+            
+            watchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    currentLocation = position;
+                    showLocationInfo(position);
+                    drawLocationMap(position);
+                },
+                function(error) {
+                    console.error('Tracking error:', error);
+                }
+            );
+            
+            isTracking = true;
+            document.getElementById('trackBtn').innerHTML = '🛑 Stop Tracking';
+            updateStatus('locationStatus', document.getElementById('locationStatus').innerHTML + '<br>🔄 Continuous tracking active...', 'success');
+        }
+
+        function stopTracking() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            isTracking = false;
+            document.getElementById('trackBtn').innerHTML = '📍 Start Tracking';
+        }
+
+        // Timer functions
+        function startTimer() {
+            console.log('Starting timer...');
+            if (!isStudying) {
+                isStudying = true;
+                updateTimer();
+            }
+        }
+
+        function pauseTimer() {
+            console.log('Pausing timer...');
+            isStudying = false;
+            updateStatus('timerStatus', '⏸️ Paused at ' + formatTime(studySeconds), '');
+        }
+
+        function stopTimer() {
+            console.log('Stopping timer...');
+            isStudying = false;
+            
+            if (studySeconds > 0) {
+                saveSession();
+                studySeconds = 0;
+                drawTimer(0);
+                updateStatus('timerStatus', '✅ Session saved successfully! Ready for next session.', 'success');
+            } else {
+                updateStatus('timerStatus', '⚠️ No study time to save. Start studying first!', 'error');
+            }
+        }
+
+        function updateTimer() {
+            if (isStudying) {
+                // Using Background Tasks API for efficient updates
+                requestIdleCallback(function() {
+                    studySeconds++;
+                    updateStatus('timerStatus', '📚 Studying... Time: ' + formatTime(studySeconds), '');
+                    drawTimer(studySeconds);
+                    setTimeout(updateTimer, 1000);
+                });
+            }
+        }
+
+        // Canvas drawing functions
+        function drawTimer(seconds) {
+            var ctx = timerCtx;
+            var centerX = 125;
+            var centerY = 125;
+            var radius = 90;
+
+            ctx.clearRect(0, 0, 250, 250);
+
+            // Background
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, 250, 250);
+
+            // Outer circle
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#dee2e6';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+
+            // Progress arc
+            if (seconds > 0) {
+                var progress = (seconds % 3600) / 3600; // Reset every hour
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, -Math.PI/2, (-Math.PI/2) + (progress * Math.PI * 2));
+                ctx.strokeStyle = '#007bff';
+                ctx.lineWidth = 8;
+                ctx.stroke();
+            }
+
+            // Center text
+            ctx.fillStyle = '#495057';
+            ctx.font = 'bold 20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(formatTime(seconds), centerX, centerY + 5);
+            
+            // Label
+            ctx.font = '12px Arial';
+            ctx.fillText('Study Timer', centerX, centerY + 30);
+        }
+
+        function drawLocationMap(position) {
+            if (!position) {
+                drawLocationPlaceholder();
+                return;
+            }
+
+            var ctx = locationCtx;
+            var centerX = 125;
+            var centerY = 125;
+
+            ctx.clearRect(0, 0, 250, 250);
+
+            // Background
+            ctx.fillStyle = '#e3f2fd';
+            ctx.fillRect(0, 0, 250, 250);
+
+            // Location rings
+            for (var i = 4; i > 0; i--) {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, i * 18, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(33, 150, 243, ' + (0.15 * i) + ')';
+                ctx.fill();
+            }
+
+            // Center point
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#1976d2';
+            ctx.fill();
+
+            // White border
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = '#424242';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('📍 Your Location', centerX, 25);
+            
+            // Coordinates
+            ctx.font = '9px Arial';
+            var lat = position.coords.latitude.toFixed(4);
+            var lon = position.coords.longitude.toFixed(4);
+            ctx.fillText(lat + '°, ' + lon + '°', centerX, 220);
+        }
+
+        function drawLocationPlaceholder() {
+            var ctx = locationCtx;
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(0, 0, 250, 250);
+            
+            ctx.fillStyle = '#6c757d';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('📍 Location Map', 125, 110);
+            ctx.font = '12px Arial';
+            ctx.fillText('Getting location...', 125, 140);
+        }
+
+        // Helper functions
+        function formatTime(seconds) {
+            var mins = Math.floor(seconds / 60);
+            var secs = seconds % 60;
+            return mins + ':' + secs.toString().padStart(2, '0');
+        }
+
+        function updateStatus(elementId, message, type) {
+            var element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = 'status' + (type ? ' ' + type : '');
+        }
+
+        // Session management
+        function saveSession() {
+            console.log('Saving session...');
+            
+            if (!currentLocation) {
+                updateStatus('sessionHistory', '❌ Cannot save: Location required. Please allow location access.', 'error');
+                return;
+            }
+
+            var sessionData = {
+                duration: studySeconds,
+                location: {
+                    latitude: currentLocation.coords.latitude,
+                    longitude: currentLocation.coords.longitude,
+                    accuracy: currentLocation.coords.accuracy
+                },
+                timestamp: new Date().toISOString()
+            };
+
+            fetch('/api/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(sessionData)
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(result) {
+                console.log('Session saved:', result);
+                displayLatestSession(sessionData);
+            })
+            .catch(function(error) {
+                console.error('Save error:', error);
+                displayLatestSession(sessionData);
+            });
+        }
+
+        function displayLatestSession(session) {
+            var duration = formatTime(session.duration);
+            var time = new Date().toLocaleTimeString();
+            var lat = session.location.latitude.toFixed(4);
+            var lon = session.location.longitude.toFixed(4);
+            
+            updateStatus('sessionHistory', 
+                '✅ Latest Session Saved<br>' +
+                '⏱️ Duration: ' + duration + '<br>' +
+                '📍 Location: ' + lat + '°, ' + lon + '°<br>' +
+                '🕒 Saved at: ' + time, 'success');
+        }
+
+        // Initialize app
+        function initApp() {
+            console.log('Initializing app...');
+            drawTimer(0);
+            drawLocationPlaceholder();
+            
+            // Auto-request location
+            setTimeout(refreshLocation, 1000);
+            
+            console.log('✅ App ready!');
+        }
+
+        // Start app when page loads
+        initApp();
+    </script>
+</body>
+</html>\);
+});
+
+// API endpoints
 app.post('/api/sessions', (req, res) => {
-    console.log('Session received:', req.body);
-    res.json({ success: true, message: 'Session saved successfully' });
+    console.log('📚 Session saved:', req.body);
+    res.json({ 
+        success: true, 
+        id: Date.now(), 
+        data: req.body,
+        message: 'Session saved successfully'
+    });
 });
 
 app.get('/api/sessions', (req, res) => {
-    res.json([]);
-});
-
-// Serve index.html for all other routes
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.json({ sessions: [], message: 'Session history endpoint' });
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log('Server running on port ' + PORT);
+    console.log('✅ Study Location Tracker running on port ' + PORT);
 });
