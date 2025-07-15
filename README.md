@@ -58,7 +58,7 @@ A full-stack web application that helps students track their study sessions with
 - **npm** (comes with Node.js) or yarn package manager
 - **Git** - [Download here](https://git-scm.com/)
 
-### Step-by-Step Setup
+
 
 #### 1. Clone the Repository
 ```bash
