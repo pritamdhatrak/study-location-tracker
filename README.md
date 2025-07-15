@@ -66,6 +66,3 @@ git clone https://github.com/pritamdhatrak/study-location-tracker.git
 cd study-location-tracker
 
 
-## 📁 Project Structure
-
-study-location-tracker/ ├── index.html # Main application interface ├── simple-server.js # Express.js backend server ├── package.json # Dependencies and scripts ├── .env # Environment variables ├── .gitignore # Git ignore rules └── README.md # Project documentation
